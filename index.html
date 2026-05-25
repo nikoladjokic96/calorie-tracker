@@ -630,9 +630,9 @@
   </div>
   <div class="form-group">
     <label>Anthropic API Key</label>
-    <input type="password" id="ob-apikey" placeholder="AIza..." autocomplete="off">
+    <input type="password" id="ob-apikey" placeholder="sk-or-..." autocomplete="off">
     <div class="api-hint">
-      Besplatno na <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a> (1500 req/dan).<br>
+      Besplatno na <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a> — bez kartice.<br>
       Čuva se samo lokalno na tvom uređaju.
     </div>
   </div>
@@ -752,7 +752,7 @@
     <div class="modal-title">Podešavanja</div>
     <div class="form-group">
       <label>Anthropic API Key</label>
-      <input type="password" id="s-apikey" placeholder="AIza...">
+      <input type="password" id="s-apikey" placeholder="sk-or-...">
     </div>
     <div class="form-group">
       <label>Težina (kg)</label>
@@ -1000,7 +1000,7 @@ function resizeImage(dataUrl, maxPx) {
 async function analyzeImage(base64, mediaType) {
   const profile = getProfile();
   if (!profile?.apiKey) {
-    showError('Nema API key-a. Idi u podešavanja i unesi Gemini API key.');
+    showError('Nema API key-a. Idi u podešavanja i unesi OpenRouter API key.');
     return;
   }
 
@@ -1024,22 +1024,25 @@ Rules:
 - name should be descriptive (e.g. "Pileća salata sa avokadom")`;
 
   try {
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${profile.apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { inline_data: { mime_type: mediaType, data: base64 } },
-              { text: prompt }
-            ]
-          }],
-          generationConfig: { maxOutputTokens: 400, temperature: 0.2 }
-        })
-      }
-    );
+    const resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${profile.apiKey}`,
+        'HTTP-Referer': location.href,
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.0-flash-exp:free',
+        max_tokens: 400,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: { url: `data:${mediaType};base64,${base64}` } },
+            { type: 'text', text: prompt }
+          ]
+        }]
+      })
+    });
 
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
@@ -1047,7 +1050,7 @@ Rules:
     }
 
     const data = await resp.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const text = data.choices?.[0]?.message?.content || '';
     const cleaned = text.replace(/```json|```/g, '').trim();
     const meal = JSON.parse(cleaned);
 
